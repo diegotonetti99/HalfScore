@@ -26,7 +26,6 @@ class MainWindow(Gtk.ApplicationWindow):
         f = Gtk.FileFilter()
         f.set_name("PDF files")
         f.add_pattern("*.pdf")
-
         filters = Gio.ListStore.new(Gtk.FileFilter)  # Create a ListStore with the type Gtk.FileFilter
         filters.append(f)  # Add the file filter to the ListStore. You could add more.
 
@@ -115,13 +114,10 @@ class MainWindow(Gtk.ApplicationWindow):
   
     def prev(self, button):
         '''load previous half page'''
-        if self.switch:
-            self.page_number_2, overlflow = self.decrement(self.page_number_2)
-        else:
+        if self.page_number_1 == self.page_number_2:
             self.page_number_1, overlflow = self.decrement(self.page_number_1)
-        if not overlflow:
-            # switch the next half part to be updated
-            self.switch = not self.switch
+        else:
+            self.page_number_2, overlflow = self.decrement(self.page_number_2)
         # force page redraw
         self.dw_1.queue_draw()
         self.dw_2.queue_draw()
@@ -142,12 +138,10 @@ class MainWindow(Gtk.ApplicationWindow):
 
     def next(self, button):
         '''load next half page'''
-        if self.switch:
-            self.page_number_2, overflow = self.increment(self.page_number_2)
-        else:
+        if self.page_number_1 == self.page_number_2:
             self.page_number_1, overflow = self.increment(self.page_number_1)
-        if not overflow:
-            self.switch = not self.switch
+        else:
+            self.page_number_2, overflow = self.increment(self.page_number_2)
         self.dw_1.queue_draw()
         self.dw_2.queue_draw()
 
@@ -164,7 +158,6 @@ class MainWindow(Gtk.ApplicationWindow):
                 self.file = file.get_path()
                 self.page_number_1 = 0
                 self.page_number_2 = 0
-                self.switch = False
                 self.document = poppler.load_from_file(self.file)
                 self.dw_1.set_draw_func(self.draw_1, None)
                 self.dw_2.set_draw_func(self.draw_2, None)
