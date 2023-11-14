@@ -33,7 +33,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.header.pack_start(self.open_button)
 
         # drawing areas to display half page
-        self.dw_1 = Gtk.DrawingArea()
+        self.dw_1 = Gtk.DrawingArea()q
         # Make it fill the available space (It will stretch with the window)
         # top
         self.dw_1.set_hexpand(True)
@@ -47,7 +47,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.overlay_1.add_overlay(self.prev_button)
         self.box.append(self.overlay_1)
         # separator
-        self.separator = Gtk.Separator(orientation=Gtk.Orientation.ORIZONTAL)
+        self.separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
         self.box.append(self.separator)
         # bottom
         self.dw_2 = Gtk.DrawingArea()
