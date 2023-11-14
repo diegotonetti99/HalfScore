@@ -2,7 +2,7 @@ import sys
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw, GLib, Gdk
+from gi.repository import Gtk, Adw, GLib, Gio
 import cairo
 import poppler
 from PIL import Image
@@ -13,7 +13,7 @@ class MainWindow(Gtk.ApplicationWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Things will go here
-        self.orientation = self.get_orientation()
+        #self.orientation = self.get_orientation()
         self.set_default_size(600, 800)
         self.set_title("HalfScore")
         self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -23,6 +23,15 @@ class MainWindow(Gtk.ApplicationWindow):
 
         self.open_dialog = Gtk.FileDialog.new()
         self.open_dialog.set_title("Select a File")
+        f = Gtk.FileFilter()
+        f.set_name("PDF files")
+        f.add_pattern("*.pdf")
+
+        filters = Gio.ListStore.new(Gtk.FileFilter)  # Create a ListStore with the type Gtk.FileFilter
+        filters.append(f)  # Add the file filter to the ListStore. You could add more.
+
+        self.open_dialog.set_filters(filters)  # Set the filters for the open dialog
+        self.open_dialog.set_default_filter(f)
 
         # Create a menu button
         self.open_button = Gtk.Button()
@@ -33,7 +42,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.header.pack_start(self.open_button)
 
         # drawing areas to display half page
-        self.dw_1 = Gtk.DrawingArea()q
+        self.dw_1 = Gtk.DrawingArea()
         # Make it fill the available space (It will stretch with the window)
         # top
         self.dw_1.set_hexpand(True)
@@ -62,11 +71,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.overlay_2.add_overlay(self.next_button)
         self.box.append(self.overlay_2)
 
-
-        # Instead, If we didn't want it to fill the available space but wanted a fixed size
-        #self.dw.set_content_width(100)
-        #self.dw.set_content_height(100)
-
+    '''
     def get_orientation(self):
         display = Gdk.Display.get_default()
         monitor = display.get_primary_monitor()
@@ -75,9 +80,10 @@ class MainWindow(Gtk.ApplicationWindow):
         vertical = False
         if geometry.width<geometry.height:
              vertical = True
-        
+    '''
 
     def draw_1(self, area, context, w, h, data):
+        '''update top page'''
         if self.document == None:
             return
         surface, image = self.render(w, self.page_number_1)
@@ -85,6 +91,7 @@ class MainWindow(Gtk.ApplicationWindow):
         context.paint()
         
     def draw_2(self, area, context, w, h, data):
+        '''update bottom page'''
         if self.document == None:
             return
         surface, image = self.render(w, self.page_number_2)
@@ -92,12 +99,10 @@ class MainWindow(Gtk.ApplicationWindow):
         context.paint()
         
     def render(self, w, n):
+        '''render the n-th page of the document with a specified width'''
         renderer = poppler.PageRenderer()
-
         # Render first page and convert to image buffer
         page = self.document.create_page(n)
-        
-
         # Use page dimensions to create cairo surface
         rect = page.page_rect()
         width = int(rect.width)
@@ -105,34 +110,38 @@ class MainWindow(Gtk.ApplicationWindow):
         res = int(w/width*72)
         image = renderer.render_page(page, xres=res, yres=res)
         buf = io.BytesIO(image.data).getbuffer()
-        #print(f'bytes used per pixel: {len(buf)/(width*height)}')
-
         surface = cairo.ImageSurface.create_for_data(buf, cairo.FORMAT_ARGB32, image.width, image.height)
         return surface, image
   
     def prev(self, button):
+        '''load previous half page'''
         if self.switch:
             self.page_number_2, overlflow = self.decrement(self.page_number_2)
         else:
             self.page_number_1, overlflow = self.decrement(self.page_number_1)
         if not overlflow:
+            # switch the next half part to be updated
             self.switch = not self.switch
+        # force page redraw
         self.dw_1.queue_draw()
         self.dw_2.queue_draw()
 
     def decrement(self, n):
         n -=1
         if n<0:
+            # check page overflow
             return 0, True
         return n, False
 
     def increment(self, n):
         n +=1
         if n>self.document.pages-1:
+            # check page overflow
             return self.document.pages-1, True
         return n, False
 
     def next(self, button):
+        '''load next half page'''
         if self.switch:
             self.page_number_2, overflow = self.increment(self.page_number_2)
         else:
@@ -143,9 +152,11 @@ class MainWindow(Gtk.ApplicationWindow):
         self.dw_2.queue_draw()
 
     def show_open_dialog(self, button):
+        '''show open file dialog'''
         self.open_dialog.open(self, None, self.open_dialog_open_callback)
         
     def open_dialog_open_callback(self, dialog, result):
+        '''load the selected file'''
         try:
             file = dialog.open_finish(result)
             if file is not None:
