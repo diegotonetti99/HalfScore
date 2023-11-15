@@ -2,7 +2,7 @@ import sys
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw, GLib, Gio
+from gi.repository import Gtk, Adw, GLib, Gio, Gdk
 import cairo
 import poppler
 from PIL import Image
@@ -18,9 +18,11 @@ class MainWindow(Gtk.ApplicationWindow):
         self.set_title("HalfScore")
         self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.set_child(self.box)
+        # title bar
         self.header = Gtk.HeaderBar()
         self.set_titlebar(self.header)
 
+        # file dialog
         self.open_dialog = Gtk.FileDialog.new()
         self.open_dialog.set_title("Select a File")
         f = Gtk.FileFilter()
@@ -28,7 +30,6 @@ class MainWindow(Gtk.ApplicationWindow):
         f.add_pattern("*.pdf")
         filters = Gio.ListStore.new(Gtk.FileFilter)  # Create a ListStore with the type Gtk.FileFilter
         filters.append(f)  # Add the file filter to the ListStore. You could add more.
-
         self.open_dialog.set_filters(filters)  # Set the filters for the open dialog
         self.open_dialog.set_default_filter(f)
 
@@ -36,9 +37,17 @@ class MainWindow(Gtk.ApplicationWindow):
         self.open_button = Gtk.Button()
         self.open_button.connect('clicked', self.show_open_dialog)
         self.open_button.set_icon_name("document-open-symbolic")  # Give it a nice icon
-
-        # Add menu button to the header bar
         self.header.pack_start(self.open_button)
+        # Create pen button
+        self.pen_button = Gtk.ToggleButton(label="Pen")
+        self.header.pack_start(self.pen_button)
+        self.pen_button.connect("toggled", self.toggle_pen)
+        # Create a color button
+        self.color = Gdk.RGBA()
+        self.color.parse("#0000FF")
+        self.color_button = Gtk.ColorButton().new_with_rgba(self.color)
+        self.header.pack_start(self.color_button)
+        
 
         # drawing areas to display half page
         self.dw_1 = Gtk.DrawingArea()
@@ -80,6 +89,10 @@ class MainWindow(Gtk.ApplicationWindow):
         if geometry.width<geometry.height:
              vertical = True
     '''
+    def toggle_pen(self, button):
+        state = not button.get_active()
+        self.next_button.set_sensitive(state)
+        self.prev_button.set_sensitive(state)
 
     def draw_1(self, area, context, w, h, data):
         '''update top page'''
