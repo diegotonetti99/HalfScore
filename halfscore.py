@@ -1,11 +1,10 @@
 import sys
 import gi
 gi.require_version('Gtk', '4.0')
-gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw, GLib, Gio, Gdk
+from gi.repository import Gtk, GLib, Gio, Gdk
 import cairo
 import poppler
-from PIL import Image
+#from PIL import Image
 import io
 
 
@@ -61,11 +60,12 @@ class MainWindow(Gtk.ApplicationWindow):
         self.prev_button.set_valign(Gtk.Align.FILL)
         self.prev_button.set_halign(Gtk.Align.FILL)
         self.prev_button.connect('clicked', self.prev)
+        self.prev_button.set_opacity(0.0)
         self.overlay_1.add_overlay(self.prev_button)
         self.box.append(self.overlay_1)
         # separator
-        self.separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        self.box.append(self.separator)
+        #self.separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        #self.box.append(self.separator)
         # bottom
         self.dw_2 = Gtk.DrawingArea()
         self.dw_2.set_hexpand(True)
@@ -76,6 +76,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.next_button.set_valign(Gtk.Align.FILL)
         self.next_button.set_halign(Gtk.Align.FILL)
         self.next_button.connect('clicked', self.next)
+        self.next_button.set_opacity(0.0)
         self.overlay_2.add_overlay(self.next_button)
         self.box.append(self.overlay_2)
 
@@ -178,7 +179,7 @@ class MainWindow(Gtk.ApplicationWindow):
             print(f"Error opening file: {error.message}")
      
 
-class MyApp(Adw.Application):
+class MyApp(Gtk.Application):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.connect('activate', self.on_activate)
