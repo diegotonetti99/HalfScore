@@ -128,7 +128,7 @@ class MainWindow(Gtk.ApplicationWindow):
   
     def prev(self, button):
         '''load previous half page'''
-        if self.page_number_1 == self.page_number_2:
+        if self.page_number_1 >= self.page_number_2:
             self.page_number_1, overlflow = self.decrement(self.page_number_1)
         else:
             self.page_number_2, overlflow = self.decrement(self.page_number_2)
@@ -152,7 +152,7 @@ class MainWindow(Gtk.ApplicationWindow):
 
     def next(self, button):
         '''load next half page'''
-        if self.page_number_1 == self.page_number_2:
+        if self.page_number_1 <= self.page_number_2:
             self.page_number_1, overflow = self.increment(self.page_number_1)
         else:
             self.page_number_2, overflow = self.increment(self.page_number_2)
