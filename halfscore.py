@@ -31,6 +31,8 @@ class MainWindow(Gtk.ApplicationWindow):
         filters.append(f)  # Add the file filter to the ListStore. You could add more.
         self.open_dialog.set_filters(filters)  # Set the filters for the open dialog
         self.open_dialog.set_default_filter(f)
+        folder = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_MUSIC)
+        self.open_dialog.set_initial_folder(Gio.File.new_for_path(folder))
 
         # Create a menu button
         self.open_button = Gtk.Button()
@@ -102,6 +104,8 @@ class MainWindow(Gtk.ApplicationWindow):
         surface, image = self.render(w, self.page_number_1)
         context.set_source_surface(surface, 0, -int(image.height/2)+ h)
         context.paint()
+        context.set_source_rgba(1.0, 1.0, 0.5, 0.15)
+        context.paint()
         
     def draw_2(self, area, context, w, h, data):
         '''update bottom page'''
@@ -110,7 +114,9 @@ class MainWindow(Gtk.ApplicationWindow):
         surface, image = self.render(w, self.page_number_2)
         context.set_source_surface(surface, 0, -int(image.height/2))
         context.paint()
-        
+        context.set_source_rgba(1.0, 0.75, 0.5, 0.15)
+        context.paint()
+
     def render(self, w, n):
         '''render the n-th page of the document with a specified width'''
         renderer = poppler.PageRenderer()
@@ -128,7 +134,7 @@ class MainWindow(Gtk.ApplicationWindow):
   
     def prev(self, button):
         '''load previous half page'''
-        if self.page_number_1 >= self.page_number_2:
+        if self.page_number_1 > self.page_number_2:
             self.page_number_1, overlflow = self.decrement(self.page_number_1)
         else:
             self.page_number_2, overlflow = self.decrement(self.page_number_2)
