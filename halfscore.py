@@ -6,7 +6,8 @@ import cairo
 import poppler
 #from PIL import Image
 import io
-
+import json
+import numpy as np
 
 class MainWindow(Gtk.ApplicationWindow):
     def __init__(self, *args, **kwargs):
@@ -44,18 +45,40 @@ class MainWindow(Gtk.ApplicationWindow):
         self.header.pack_start(self.pen_button)
         self.pen_button.connect("toggled", self.toggle_pen)
         # Create a color button
-        self.color = Gdk.RGBA()
+        '''self.color = Gdk.RGBA()
         self.color.parse("#0000FF")
         self.color_button = Gtk.ColorButton().new_with_rgba(self.color)
-        self.header.pack_start(self.color_button)
+        self.header.pack_start(self.color_button)'''
+        # Create a eraser button
+        self.eraser_button = Gtk.ToggleButton(label='Eraser')
+        self.header.pack_start(self.eraser_button)
+        self.eraser_button.connect('toggled', self.toggle_eraser)
         
+        # mouse gestures for drawing
+        self.strokes_1 = []
+        press1 = Gtk.GestureClick.new()
+        press1.connect("pressed", self.press1)
+        press2 = Gtk.GestureClick.new()
+        press2.connect("pressed", self.press2)
+        release1 = Gtk.GestureClick.new()
+        release1.connect('released', self.release1)
+        release2 = Gtk.GestureClick.new()
+        release2.connect('released', self.release2)
+        motion1 = Gtk.EventControllerMotion.new()
+        motion1.connect("motion", self.mouse_motion1)
+        motion2 = Gtk.EventControllerMotion.new()
+        motion2.connect('motion', self.mouse_motion2)
 
+        self.press_flag = False
         # drawing areas to display half page
         self.dw_1 = Gtk.DrawingArea()
         # Make it fill the available space (It will stretch with the window)
         # top
         self.dw_1.set_hexpand(True)
         self.dw_1.set_vexpand(True)
+        self.dw_1.add_controller(press1)
+        self.dw_1.add_controller(motion1)
+        self.dw_1.add_controller(release1)
         self.overlay_1 = Gtk.Overlay()
         self.overlay_1.set_child(self.dw_1)
         self.prev_button = Gtk.Button()
@@ -65,13 +88,16 @@ class MainWindow(Gtk.ApplicationWindow):
         self.prev_button.set_opacity(0.0)
         self.overlay_1.add_overlay(self.prev_button)
         self.box.append(self.overlay_1)
-        # separator
-        #self.separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        #self.box.append(self.separator)
+
         # bottom
+        self.strokes_2 = []
+
         self.dw_2 = Gtk.DrawingArea()
         self.dw_2.set_hexpand(True)
         self.dw_2.set_vexpand(True)
+        self.dw_2.add_controller(press2)
+        self.dw_2.add_controller(motion2)
+        self.dw_2.add_controller(release2)
         self.overlay_2 = Gtk.Overlay()
         self.overlay_2.set_child(self.dw_2)
         self.next_button = Gtk.Button()
@@ -82,21 +108,80 @@ class MainWindow(Gtk.ApplicationWindow):
         self.overlay_2.add_overlay(self.next_button)
         self.box.append(self.overlay_2)
 
-    '''
-    def get_orientation(self):
-        display = Gdk.Display.get_default()
-        monitor = display.get_primary_monitor()
-        scale_factor = monitor.get_scale_factor()
-        geometry = monitor.get_geometry()
-        vertical = False
-        if geometry.width<geometry.height:
-             vertical = True
-    '''
+    def mouse_motion1(self, motion, x, y):
+        if not self.press_flag:
+            return
+        if self.pen_button.get_active():
+            self.stroke.append((x, y))
+        elif self.eraser_button.get_active():
+            for stroke in self.strokes_1[self.page_number_1]:
+                for xs ,ys in stroke:
+                    if np.linalg.norm(np.array((x-xs, y-ys))) < 5:
+                        self.strokes_1[self.page_number_1].remove(stroke)
+        self.dw_1.queue_draw()  # Force a redraw
+
+    def mouse_motion2(self, motion, x, y):
+        if not self.press_flag:
+            return
+        if self.pen_button.get_active():
+            self.stroke.append((x, y))
+        elif self.eraser_button.get_active():
+            for stroke in self.strokes_2[self.page_number_2]:
+                for xs ,ys in stroke:
+                    if np.linalg.norm(np.array((x-xs, y-ys))) < 5:
+                        self.strokes_2[self.page_number_2].remove(stroke)
+        self.dw_2.queue_draw()  # Force a redraw
+
+    def save_ink(self):
+        file = self.file.replace('.pdf','.json')
+        data = {'top': self.strokes_1, 'bottom':self.strokes_2}
+        with open(file, "w") as write_file:
+            json.dump(data, write_file)
+
+    def press1(self, gesture, data, x, y):
+        self.press_flag = True
+        if self.pen_button.get_active():
+            self.stroke = [(x, y)]
+            self.strokes_1[self.page_number_1].append(self.stroke)
+    
+    def press2(self, gesture, data, x, y):
+        self.press_flag = True
+        if self.pen_button.get_active():
+            self.stroke = [(x, y)]
+            self.strokes_2[self.page_number_2].append(self.stroke)
+
+    def release1(self, gesture, data, x, y):
+        self.press_flag = False
+        self.save_ink()
+
+    def release2(self, gesture, data, x, y):
+        self.press_flag = False
+        self.save_ink()
+
+    def dw2_click(self, gesture, data, x, y):
+        if self.pen_button.get_active():
+            self.strokes_2[self.page_number_2].append((x, y))
+        elif self.eraser_button.get_active():
+            for stroke in self.strokes_2[self.page_number_2]:
+                if np.linalg.norm(np.array((x-stroke[0], y-stroke[1]))) < 5:
+                    self.strokes_2[self.page_number_2].remove(stroke)
+        self.dw_2.queue_draw()  # Force a redraw
+        self.save_ink()
+
     def toggle_pen(self, button):
+        if button.get_active():
+            self.eraser_button.set_active(False)
         state = not button.get_active()
         self.next_button.set_sensitive(state)
         self.prev_button.set_sensitive(state)
-
+        
+    def toggle_eraser(self, button):
+        if button.get_active():
+            self.pen_button.set_active(False)
+        state = not button.get_active()
+        self.next_button.set_sensitive(state)
+        self.prev_button.set_sensitive(state)
+        
     def draw_1(self, area, context, w, h, data):
         '''update top page'''
         if self.document == None:
@@ -104,8 +189,19 @@ class MainWindow(Gtk.ApplicationWindow):
         surface, image = self.render(w, self.page_number_1)
         context.set_source_surface(surface, 0, -int(image.height/2)+ h)
         context.paint()
-        context.set_source_rgba(1.0, 1.0, 0.5, 0.15)
+        if self.page_number_1 == self.page_number_2:
+            context.set_source_rgba(1.0, 1.0, 0.5, 0.15)
+        else:
+            context.set_source_rgba(1.0, 0.75, 0.5, 0.15)
         context.paint()
+
+        context.set_source_rgba(1.0, 0.0, 0.0, 1.0)
+        context.set_line_width(1)
+        for stroke in self.strokes_1[self.page_number_1]:
+            context.move_to(stroke[0][0], stroke[0][1])
+            for x, y in stroke:
+                context.line_to(x, y)
+            context.stroke()
         
     def draw_2(self, area, context, w, h, data):
         '''update bottom page'''
@@ -114,8 +210,19 @@ class MainWindow(Gtk.ApplicationWindow):
         surface, image = self.render(w, self.page_number_2)
         context.set_source_surface(surface, 0, -int(image.height/2))
         context.paint()
-        context.set_source_rgba(1.0, 0.75, 0.5, 0.15)
+        if self.page_number_1 == self.page_number_2:
+            context.set_source_rgba(1.0, 1.0, 0.5, 0.15)
+        else:
+            context.set_source_rgba(1.0, 0.75, 0.5, 0.15)
         context.paint()
+
+        context.set_source_rgba(1.0, 0.0, 0.0, 1.0)
+        context.set_line_width(1)
+        for stroke in self.strokes_2[self.page_number_2]:
+            context.move_to(stroke[0][0], stroke[0][1])
+            for x, y in stroke:
+                context.line_to(x, y)
+            context.stroke()
 
     def render(self, w, n):
         '''render the n-th page of the document with a specified width'''
@@ -179,12 +286,23 @@ class MainWindow(Gtk.ApplicationWindow):
                 self.page_number_1 = 0
                 self.page_number_2 = 0
                 self.document = poppler.load_from_file(self.file)
+                self.strokes_1 = [[] for i in range(self.document.pages)]
+                self.strokes_2 = [[] for i in range(self.document.pages)]
+                jfile = self.file.replace('.pdf','.json')
+                try:
+                    with open(jfile, 'r') as read_file:
+                        data = json.load(read_file)
+                        for i in range(self.document.pages):
+                            self.strokes_1[i] = data['top'][i]
+                            self.strokes_2[i] = data['bottom'][i]
+                except:
+                    pass
                 self.dw_1.set_draw_func(self.draw_1, None)
                 self.dw_2.set_draw_func(self.draw_2, None)
+
         except GLib.Error as error:
             print(f"Error opening file: {error.message}")
      
-
 class MyApp(Gtk.Application):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
