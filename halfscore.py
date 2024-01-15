@@ -8,6 +8,7 @@ import poppler
 import io
 import json
 import numpy as np
+from scipy.interpolate import CubicSpline
 
 class MainWindow(Gtk.ApplicationWindow):
     def __init__(self, *args, **kwargs):
@@ -196,11 +197,21 @@ class MainWindow(Gtk.ApplicationWindow):
         context.paint()
 
         context.set_source_rgba(1.0, 0.0, 0.0, 1.0)
-        context.set_line_width(1)
+        context.set_line_width(2)
         for stroke in self.strokes_1[self.page_number_1]:
+            if len(stroke) < 2:
+                continue
             context.move_to(stroke[0][0], stroke[0][1])
-            for x, y in stroke:
-                context.line_to(x, y)
+            data = np.array(stroke)
+            t = np.linspace(0, 1, data[:,0].size)
+            csx = CubicSpline(t, data[:,0])
+            csy = CubicSpline(t, data[:,1])
+            tt = np.linspace(0,1,5*data[:,0].size)
+            #for x, y in stroke:
+            xx = csx(tt)
+            yy = csy(tt)
+            for i in range(0,tt.size):
+                context.line_to(xx[i], yy[i])
             context.stroke()
         
     def draw_2(self, area, context, w, h, data):
@@ -217,11 +228,21 @@ class MainWindow(Gtk.ApplicationWindow):
         context.paint()
 
         context.set_source_rgba(1.0, 0.0, 0.0, 1.0)
-        context.set_line_width(1)
+        context.set_line_width(2)
         for stroke in self.strokes_2[self.page_number_2]:
+            if len(stroke) < 2:
+                continue
             context.move_to(stroke[0][0], stroke[0][1])
-            for x, y in stroke:
-                context.line_to(x, y)
+            data = np.array(stroke)
+            t = np.linspace(0, 1, data[:,0].size)
+            csx = CubicSpline(t, data[:,0])
+            csy = CubicSpline(t, data[:,1])
+            tt = np.linspace(0,1,5*data[:,0].size)
+            #for x, y in stroke:
+            xx = csx(tt)
+            yy = csy(tt)
+            for i in range(0,tt.size):
+                context.line_to(xx[i], yy[i])
             context.stroke()
 
     def render(self, w, n):
