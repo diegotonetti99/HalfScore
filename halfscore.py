@@ -15,6 +15,7 @@ class MainWindow(Gtk.ApplicationWindow):
         super().__init__(*args, **kwargs)
         # Things will go here
         #self.orientation = self.get_orientation()
+        self.connect('close-request', self.close_event)
         self.set_default_size(600, 800)
         self.set_title("HalfScore")
         self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -133,11 +134,16 @@ class MainWindow(Gtk.ApplicationWindow):
                         self.strokes_2[self.page_number_2].remove(stroke)
         self.dw_2.queue_draw()  # Force a redraw
 
-    def save_ink(self):
-        file = self.file.replace('.pdf','.json')
-        data = {'top': self.strokes_1, 'bottom':self.strokes_2}
-        with open(file, "w") as write_file:
-            json.dump(data, write_file)
+    def save(self):
+        if self.file is None:
+            return
+        try:
+            file = self.file.replace('.pdf','.json')
+            data = {'page': self.page_number_1, 'top': self.strokes_1, 'bottom':self.strokes_2}
+            with open(file, "w") as write_file:
+                json.dump(data, write_file)
+        except:
+            pass
 
     def press1(self, gesture, data, x, y):
         self.press_flag = True
@@ -153,11 +159,13 @@ class MainWindow(Gtk.ApplicationWindow):
 
     def release1(self, gesture, data, x, y):
         self.press_flag = False
-        self.save_ink()
+        self.stroke = None
+        self.dw_1.queue_draw()
 
     def release2(self, gesture, data, x, y):
         self.press_flag = False
-        self.save_ink()
+        self.stroke = None
+        self.dw_2.queue_draw()
 
     def dw2_click(self, gesture, data, x, y):
         if self.pen_button.get_active():
@@ -167,7 +175,7 @@ class MainWindow(Gtk.ApplicationWindow):
                 if np.linalg.norm(np.array((x-stroke[0], y-stroke[1]))) < 5:
                     self.strokes_2[self.page_number_2].remove(stroke)
         self.dw_2.queue_draw()  # Force a redraw
-        self.save_ink()
+        self.save()
 
     def toggle_pen(self, button):
         if button.get_active():
@@ -182,13 +190,15 @@ class MainWindow(Gtk.ApplicationWindow):
         state = not button.get_active()
         self.next_button.set_sensitive(state)
         self.prev_button.set_sensitive(state)
-        
+            
     def draw_1(self, area, context, w, h, data):
         '''update top page'''
         if self.document == None:
             return
-        surface, image = self.render(w, self.page_number_1)
-        context.set_source_surface(surface, 0, -int(image.height/2)+ h)
+        if self.changed1 or self.surface1 is None or self.image1 is None:
+            self.surface1, self.image1 = self.render(w, self.page_number_1)
+            self.changed1 = False
+        context.set_source_surface(self.surface1, 0, -int(self.image1.height/2)+ h)
         context.paint()
         if self.page_number_1 == self.page_number_2:
             context.set_source_rgba(1.0, 1.0, 0.5, 0.15)
@@ -198,28 +208,37 @@ class MainWindow(Gtk.ApplicationWindow):
 
         context.set_source_rgba(1.0, 0.0, 0.0, 1.0)
         context.set_line_width(2)
-        for stroke in self.strokes_1[self.page_number_1]:
+        self.draw_stroke(context, self.strokes_1[self.page_number_1])
+
+    def draw_stroke(self, context, strokes):
+        for stroke in strokes:
             if len(stroke) < 2:
                 continue
             context.move_to(stroke[0][0], stroke[0][1])
-            data = np.array(stroke)
-            t = np.linspace(0, 1, data[:,0].size)
-            csx = CubicSpline(t, data[:,0])
-            csy = CubicSpline(t, data[:,1])
-            tt = np.linspace(0,1,5*data[:,0].size)
-            #for x, y in stroke:
-            xx = csx(tt)
-            yy = csy(tt)
-            for i in range(0,tt.size):
-                context.line_to(xx[i], yy[i])
+            if stroke==self.stroke:
+                for x, y in stroke:
+                    context.line_to(x, y)
+            else:
+                data = np.array(stroke)
+                t = np.linspace(0, 1, data[:,0].size)
+                csx = CubicSpline(t, data[:,0])
+                csy = CubicSpline(t, data[:,1])
+                tt = np.linspace(0,1,3*data[:,0].size)
+                #for x, y in stroke:
+                xx = csx(tt)
+                yy = csy(tt)
+                for i in range(0,tt.size):
+                    context.line_to(xx[i], yy[i])
             context.stroke()
         
     def draw_2(self, area, context, w, h, data):
         '''update bottom page'''
         if self.document == None:
             return
-        surface, image = self.render(w, self.page_number_2)
-        context.set_source_surface(surface, 0, -int(image.height/2))
+        if self.changed2 or self.surface2 is None or self.image2 is None:
+            self.surface2, self.image2 = self.render(w, self.page_number_2)
+            self.changed2 = False
+        context.set_source_surface(self.surface2, 0, -int(self.image2.height/2))
         context.paint()
         if self.page_number_1 == self.page_number_2:
             context.set_source_rgba(1.0, 1.0, 0.5, 0.15)
@@ -229,21 +248,7 @@ class MainWindow(Gtk.ApplicationWindow):
 
         context.set_source_rgba(1.0, 0.0, 0.0, 1.0)
         context.set_line_width(2)
-        for stroke in self.strokes_2[self.page_number_2]:
-            if len(stroke) < 2:
-                continue
-            context.move_to(stroke[0][0], stroke[0][1])
-            data = np.array(stroke)
-            t = np.linspace(0, 1, data[:,0].size)
-            csx = CubicSpline(t, data[:,0])
-            csy = CubicSpline(t, data[:,1])
-            tt = np.linspace(0,1,5*data[:,0].size)
-            #for x, y in stroke:
-            xx = csx(tt)
-            yy = csy(tt)
-            for i in range(0,tt.size):
-                context.line_to(xx[i], yy[i])
-            context.stroke()
+        self.draw_stroke(context, self.strokes_2[self.page_number_2])
 
     def render(self, w, n):
         '''render the n-th page of the document with a specified width'''
@@ -267,8 +272,11 @@ class MainWindow(Gtk.ApplicationWindow):
         else:
             self.page_number_2, overlflow = self.decrement(self.page_number_2)
         # force page redraw
+        self.changed1 = True
+        self.changed2 = True
         self.dw_1.queue_draw()
         self.dw_2.queue_draw()
+        self.save()
 
     def decrement(self, n):
         n -=1
@@ -290,8 +298,11 @@ class MainWindow(Gtk.ApplicationWindow):
             self.page_number_1, overflow = self.increment(self.page_number_1)
         else:
             self.page_number_2, overflow = self.increment(self.page_number_2)
+        self.changed1 = True
+        self.changed2 = True
         self.dw_1.queue_draw()
         self.dw_2.queue_draw()
+        self.save()
 
     def show_open_dialog(self, button):
         '''show open file dialog'''
@@ -306,9 +317,12 @@ class MainWindow(Gtk.ApplicationWindow):
                 self.file = file.get_path()
                 self.page_number_1 = 0
                 self.page_number_2 = 0
+                self.changed1 = True
+                self.changed2 = True
                 self.document = poppler.load_from_file(self.file)
                 self.strokes_1 = [[] for i in range(self.document.pages)]
                 self.strokes_2 = [[] for i in range(self.document.pages)]
+                self.stroke = None
                 jfile = self.file.replace('.pdf','.json')
                 try:
                     with open(jfile, 'r') as read_file:
@@ -316,6 +330,8 @@ class MainWindow(Gtk.ApplicationWindow):
                         for i in range(self.document.pages):
                             self.strokes_1[i] = data['top'][i]
                             self.strokes_2[i] = data['bottom'][i]
+                        self.page_number_1 = data['page']
+                        self.page_number_2 = data['page']
                 except:
                     pass
                 self.dw_1.set_draw_func(self.draw_1, None)
@@ -324,6 +340,9 @@ class MainWindow(Gtk.ApplicationWindow):
         except GLib.Error as error:
             print(f"Error opening file: {error.message}")
      
+    def close_event(self, event):
+        self.save()
+
 class MyApp(Gtk.Application):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
