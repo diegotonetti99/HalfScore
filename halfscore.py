@@ -306,6 +306,10 @@ class MainWindow(Gtk.ApplicationWindow):
 
     def show_open_dialog(self, button):
         '''show open file dialog'''
+        try:
+            self.save()
+        except:
+            pass
         self.open_dialog.open(self, None, self.open_dialog_open_callback)
         
     def open_dialog_open_callback(self, dialog, result):
