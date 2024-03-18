@@ -13,7 +13,7 @@ from scipy.interpolate import CubicSpline
 class MainWindow(Gtk.ApplicationWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
+        self.file = None
 
         # Things will go here
         #self.orientation = self.get_orientation()
@@ -50,10 +50,12 @@ class MainWindow(Gtk.ApplicationWindow):
         self.header.pack_start(self.pen_button)
         self.pen_button.connect("toggled", self.toggle_pen)
         # Create a color button
-        '''self.color = Gdk.RGBA()
+        self.color = Gdk.RGBA()
         self.color.parse("#0000FF")
-        self.color_button = Gtk.ColorButton().new_with_rgba(self.color)
-        self.header.pack_start(self.color_button)'''
+        self.color_dialog = Gtk.ColorDialog()
+        self.color_button = Gtk.ColorDialogButton.new(self.color_dialog)
+        # self.color_button.connect('color-set', self.color_changed)
+        self.header.pack_start(self.color_button)
         # Create a eraser button
         self.eraser_button = Gtk.ToggleButton(label='Eraser')
         self.header.pack_start(self.eraser_button)
@@ -116,55 +118,62 @@ class MainWindow(Gtk.ApplicationWindow):
         self.connect_after('notify', self.on_size_changed)
 
     def mouse_motion1(self, motion, x, y):
-        x, y = self.adimensionalize(x, y)
         if not self.press_flag:
             return
-        if self.pen_button.get_active():
-            self.stroke.append((x, y))
-        elif self.eraser_button.get_active():
-            for stroke in self.strokes_1[self.page_number_1]:
-                for xs ,ys in stroke:
-                    if np.linalg.norm(np.array((x-xs, y-ys))) < 5:
-                        self.strokes_1[self.page_number_1].remove(stroke)
-        self.dw_1.queue_draw()  # Force a redraw
+        self.mouse_motion(x, y, self.strokes_1[self.page_number_1], self.dw_1, top=True)
 
     def mouse_motion2(self, motion, x, y):
-        x, y = self.adimensionalize(x, y)
         if not self.press_flag:
             return
+        self.mouse_motion(x, y, self.strokes_2[self.page_number_2], self.dw_2, top=False)
+
+    def mouse_motion(self, x, y, page_strokes, drawing_area, top):
+        x, y = self.adimensionalize(x, y, top)
         if self.pen_button.get_active():
-            self.stroke.append((x, y))
+            self.stroke['points'].append((x, y))
         elif self.eraser_button.get_active():
-            for stroke in self.strokes_2[self.page_number_2]:
-                for xs ,ys in stroke:
+            for stroke in page_strokes:
+                for xs, ys in stroke['points']:
                     if np.linalg.norm(np.array((x-xs, y-ys))) < 5:
-                        self.strokes_2[self.page_number_2].remove(stroke)
-        self.dw_2.queue_draw()  # Force a redraw
+                        page_strokes.remove(stroke)
+        drawing_area.queue_draw()  # Force a redraw
 
     def save(self):
         if self.file is None:
             return
         try:
             file = self.file.replace('.pdf','.json')
-            data = {'page': self.page_number_1, 'top': self.strokes_1, 'bottom':self.strokes_2}
+            # data = {'page': self.page_number_1, 'top': [dataclasses.asdict(stroke) for stroke in self.strokes_1], 'bottom':[dataclasses.asdict(stroke) for stroke in self.strokes_2]}
+            data = {'page': self.page_number_1, 'top': self.strokes_1, 'bottom': self.strokes_2}
             with open(file, "w") as write_file:
                 json.dump(data, write_file)
-        except:
+        except Exception as e:
+            print(e)
             pass
 
     def press1(self, gesture, data, x, y):
-        x, y = self.adimensionalize(x, y)
         self.press_flag = True
         if self.pen_button.get_active():
-            self.stroke = [(x, y)]
-            self.strokes_1[self.page_number_1].append(self.stroke)
+            # start a new stroke on top half
+            self.new_stroke(x, y, self.strokes_1[self.page_number_1], top=True)
     
     def press2(self, gesture, data, x, y):
-        x, y = self.adimensionalize(x, y)
         self.press_flag = True
         if self.pen_button.get_active():
-            self.stroke = [(x, y)]
-            self.strokes_2[self.page_number_2].append(self.stroke)
+            # start a new stroke on bottom half
+            self.new_stroke(x, y, self.strokes_2[self.page_number_2], top=False)
+
+    def new_stroke(self, x, y, page_strokes, top):
+        x, y = self.adimensionalize(x, y, top)
+        color = self.color_button.get_rgba()
+        # self.stroke = Stroke([(x, y)], color.red, color.green, color.blue, color.alpha, 2.0/self.box.get_width())
+        self.stroke = {'points': [(x, y)],
+                       'red': color.red,
+                       'green': color.green,
+                       'blue': color.blue,
+                       'alpha': color.alpha,
+                       'width': 2.0/self.box.get_width()}
+        page_strokes.append(self.stroke)
 
     def release1(self, gesture, data, x, y):
         self.press_flag = False
@@ -175,16 +184,6 @@ class MainWindow(Gtk.ApplicationWindow):
         self.press_flag = False
         self.stroke = None
         self.dw_2.queue_draw()
-
-    def dw2_click(self, gesture, data, x, y):
-        if self.pen_button.get_active():
-            self.strokes_2[self.page_number_2].append((x, y))
-        elif self.eraser_button.get_active():
-            for stroke in self.strokes_2[self.page_number_2]:
-                if np.linalg.norm(np.array((x-stroke[0], y-stroke[1]))) < 5:
-                    self.strokes_2[self.page_number_2].remove(stroke)
-        self.dw_2.queue_draw()  # Force a redraw
-        self.save()
 
     def toggle_pen(self, button):
         if button.get_active():
@@ -214,19 +213,20 @@ class MainWindow(Gtk.ApplicationWindow):
         else:
             context.set_source_rgba(1.0, 0.75, 0.5, 0.15)
         context.paint()
+        self.draw_stroke(context, self.strokes_1[self.page_number_1], top=True)
 
-        context.set_source_rgba(1.0, 0.0, 0.0, 1.0)
-        context.set_line_width(2)
-        self.draw_stroke(context, self.strokes_1[self.page_number_1])
-
-    def draw_stroke(self, context, strokes):
+    def draw_stroke(self, context, strokes, top):
         w = self.box.get_width()
         h = self.box.get_height()
         for stroke in strokes:
-            data = np.array(stroke)*w
-            data[:,1] += h/2
-            if len(stroke) < 2:
+            data = np.array(stroke['points'])*w
+            if top:
+                data[:,1] += h/2
+            if len(data) < 2:
                 continue
+            context.set_source_rgba(stroke['red'], stroke['green'], stroke['blue'], stroke['alpha'])
+            # context.set_source_rgba(stroke['red'], stroke['green'], stroke['blue'], stroke['alpha'])
+            context.set_line_width(stroke['width']*w)
             context.move_to(data[0][0], data[0][1])
             if stroke==self.stroke:
                 for x, y in data:
@@ -260,7 +260,7 @@ class MainWindow(Gtk.ApplicationWindow):
 
         context.set_source_rgba(1.0, 0.0, 0.0, 1.0)
         context.set_line_width(2)
-        self.draw_stroke(context, self.strokes_2[self.page_number_2])
+        self.draw_stroke(context, self.strokes_2[self.page_number_2], top=False)
 
     def render(self, w, n):
         '''render the n-th page of the document with a specified width'''
@@ -344,6 +344,8 @@ class MainWindow(Gtk.ApplicationWindow):
                     with open(jfile, 'r') as read_file:
                         data = json.load(read_file)
                         for i in range(self.document.pages):
+                            # self.strokes_1[i].append(Stroke(**s) for s in data['top'][i])
+                            # self.strokes_2[i].append(Stroke(**s) for s in data['bottom'][i])
                             self.strokes_1[i] = data['top'][i]
                             self.strokes_2[i] = data['bottom'][i]
                         self.page_number_1 = data['page']
@@ -359,13 +361,15 @@ class MainWindow(Gtk.ApplicationWindow):
     def close_event(self, event):
         self.save()
     
-    def adimensionalize(self, x, y):
+    def adimensionalize(self, x, y, top):
         # make coordinates adimensional in respect to width
-        # alloc = self.box.get_allocation()
         w = self.box.get_width()
         h = self.box.get_height()
         x = x/w
-        y = (y-h/2)/w
+        if top:
+            y = (y-h/2)/w
+        else:
+            y = y/w
         return x, y
 
     def on_size_changed(self, widget, param):
@@ -374,7 +378,6 @@ class MainWindow(Gtk.ApplicationWindow):
             self.changed2 = True
             self.dw_1.queue_draw()  # Force a redraw
             self.dw_2.queue_draw()  # Force a redraw
-
 
 class MyApp(Gtk.Application):
     def __init__(self, **kwargs):
