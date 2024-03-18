@@ -13,11 +13,14 @@ from scipy.interpolate import CubicSpline
 class MainWindow(Gtk.ApplicationWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+
         # Things will go here
         #self.orientation = self.get_orientation()
         self.connect('close-request', self.close_event)
         self.set_default_size(600, 800)
         self.set_title("HalfScore")
+
         self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.set_child(self.box)
         # title bar
@@ -110,7 +113,10 @@ class MainWindow(Gtk.ApplicationWindow):
         self.overlay_2.add_overlay(self.next_button)
         self.box.append(self.overlay_2)
 
+        self.connect_after('notify', self.on_size_changed)
+
     def mouse_motion1(self, motion, x, y):
+        x, y = self.adimensionalize(x, y)
         if not self.press_flag:
             return
         if self.pen_button.get_active():
@@ -123,6 +129,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.dw_1.queue_draw()  # Force a redraw
 
     def mouse_motion2(self, motion, x, y):
+        x, y = self.adimensionalize(x, y)
         if not self.press_flag:
             return
         if self.pen_button.get_active():
@@ -146,12 +153,14 @@ class MainWindow(Gtk.ApplicationWindow):
             pass
 
     def press1(self, gesture, data, x, y):
+        x, y = self.adimensionalize(x, y)
         self.press_flag = True
         if self.pen_button.get_active():
             self.stroke = [(x, y)]
             self.strokes_1[self.page_number_1].append(self.stroke)
     
     def press2(self, gesture, data, x, y):
+        x, y = self.adimensionalize(x, y)
         self.press_flag = True
         if self.pen_button.get_active():
             self.stroke = [(x, y)]
@@ -211,15 +220,18 @@ class MainWindow(Gtk.ApplicationWindow):
         self.draw_stroke(context, self.strokes_1[self.page_number_1])
 
     def draw_stroke(self, context, strokes):
+        w = self.box.get_width()
+        h = self.box.get_height()
         for stroke in strokes:
+            data = np.array(stroke)*w
+            data[:,1] += h/2
             if len(stroke) < 2:
                 continue
-            context.move_to(stroke[0][0], stroke[0][1])
+            context.move_to(data[0][0], data[0][1])
             if stroke==self.stroke:
-                for x, y in stroke:
+                for x, y in data:
                     context.line_to(x, y)
             else:
-                data = np.array(stroke)
                 t = np.linspace(0, 1, data[:,0].size)
                 csx = CubicSpline(t, data[:,0])
                 csy = CubicSpline(t, data[:,1])
@@ -346,6 +358,23 @@ class MainWindow(Gtk.ApplicationWindow):
      
     def close_event(self, event):
         self.save()
+    
+    def adimensionalize(self, x, y):
+        # make coordinates adimensional in respect to width
+        # alloc = self.box.get_allocation()
+        w = self.box.get_width()
+        h = self.box.get_height()
+        x = x/w
+        y = (y-h/2)/w
+        return x, y
+
+    def on_size_changed(self, widget, param):
+        if param.name in ['is-active','scale-factor', 'css-classes']:
+            self.changed1 = True
+            self.changed2 = True
+            self.dw_1.queue_draw()  # Force a redraw
+            self.dw_2.queue_draw()  # Force a redraw
+
 
 class MyApp(Gtk.Application):
     def __init__(self, **kwargs):
