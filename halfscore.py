@@ -43,18 +43,18 @@ class MainWindow(Gtk.ApplicationWindow):
         # Create a menu button
         self.open_button = Gtk.Button()
         self.open_button.connect('clicked', self.show_open_dialog)
-        self.open_button.set_icon_name("document-open-symbolic")  # Give it a nice icon
+        self.open_button.set_icon_name("document-open-symbolic")
         self.header.pack_start(self.open_button)
         # Create pen button
         self.pen_button = Gtk.ToggleButton(label="Pen")
         self.header.pack_start(self.pen_button)
         self.pen_button.connect("toggled", self.toggle_pen)
         # Create a color button
-        self.color = Gdk.RGBA()
-        self.color.parse("#0000FF")
         self.color_dialog = Gtk.ColorDialog()
         self.color_button = Gtk.ColorDialogButton.new(self.color_dialog)
-        # self.color_button.connect('color-set', self.color_changed)
+        color = Gdk.RGBA()
+        color.parse('#FF0000FF') # set color RED as default
+        self.color_button.set_rgba(color)
         self.header.pack_start(self.color_button)
         # Create a eraser button
         self.eraser_button = Gtk.ToggleButton(label='Eraser')
@@ -129,12 +129,13 @@ class MainWindow(Gtk.ApplicationWindow):
 
     def mouse_motion(self, x, y, page_strokes, drawing_area, top):
         x, y = self.adimensionalize(x, y, top)
+        w = self.box.get_width()
         if self.pen_button.get_active():
             self.stroke['points'].append((x, y))
         elif self.eraser_button.get_active():
             for stroke in page_strokes:
                 for xs, ys in stroke['points']:
-                    if np.linalg.norm(np.array((x-xs, y-ys))) < 5:
+                    if np.linalg.norm(np.array((x-xs, y-ys))) < 5/w:
                         page_strokes.remove(stroke)
         drawing_area.queue_draw()  # Force a redraw
 
