@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=HalfScore
+Exec=sh /var/home/diego/Projects/HalfScore/launch.sh
+Icon=/var/home/diego/Projects/HalfScore/icon.svg
+Categories=Office;
+Terminal=false
