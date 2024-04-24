@@ -1,3 +1,5 @@
 #!/usr/bin/bash
+source /var/home/diego/.bashrc
+conda activate halfscore
 cd "$(dirname "$0")"
-.env/bin/python halfscore.py
+python halfscore.py
